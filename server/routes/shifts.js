@@ -7,9 +7,11 @@ const express = require("express");
 const auth = require("../middleware/auth");
 const router = express.Router();
 
+const REGULAR_HOURS = 8.6;
+const OVERTIME_125 = 10.6;
+
 router.get("/", async (req, res) => {
   const authHeader = req.headers.authorization;
-
   if (!authHeader)
     return res.status(401).send("No authorization header provided.");
 
@@ -19,7 +21,6 @@ router.get("/", async (req, res) => {
     return res.status(401).send("Invalid authorization header format.");
 
   const token = parts[1];
-
   try {
     const decoded = jwt.verify(token, config.get("jwtPrivateKey"));
     req.user = decoded;
@@ -28,9 +29,6 @@ router.get("/", async (req, res) => {
   }
 
   const shifts = await Shift.find({ userId: req.user._id });
-
-  console.log("shifts", shifts);
-
   if (!shifts) return res.status(404).send("No shifts found for this user.");
 
   res.send({ shifts: shifts });
@@ -104,18 +102,15 @@ router.post("/endShift/", auth, async (req, res) => {
   shift.totalHoursShiftExcludingPauses =
     shift.totalHoursShift - shift.totalPause;
 
-  if (shift.totalHoursShiftExcludingPauses < 8.6) {
+  if (shift.totalHoursShiftExcludingPauses < REGULAR_HOURS) {
     shift.totalRegularHoursShift = shift.totalHoursShiftExcludingPauses;
-    shift.totalOvertime1 = 0;
-    shift.totalOvertime2 = 0;
-  } else if (shift.totalHoursShiftExcludingPauses < 10.6) {
-    shift.totalRegularHoursShift = 8.6;
-    shift.totalOvertime1 = shift.totalHoursShiftExcludingPauses - 8.6;
-    shift.totalOvertime2 = 0;
+  } else if (shift.totalHoursShiftExcludingPauses < OVERTIME_125) {
+    shift.totalRegularHoursShift = REGULAR_HOURS;
+    shift.totalOvertime1 = shift.totalHoursShiftExcludingPauses - REGULAR_HOURS;
   } else {
-    shift.totalRegularHoursShift = 8.6;
+    shift.totalRegularHoursShift = REGULAR_HOURS;
     shift.totalOvertime1 = 2;
-    shift.totalOvertime2 = shift.totalHoursShiftExcludingPauses - 10.6;
+    shift.totalOvertime2 = shift.totalHoursShiftExcludingPauses - OVERTIME_125;
   }
 
   shift = await shift.save();
